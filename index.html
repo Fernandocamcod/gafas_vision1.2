@@ -5,7 +5,6 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=5.0">
   <title>NavVision - Asistente Accesible de Orientación y Rastreo GPS</title>
 
-  <!-- PWA -->
   <meta name="theme-color" content="#FACC15">
   <meta name="apple-mobile-web-app-capable" content="yes">
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
@@ -71,9 +70,20 @@
     #mapaWrap.fullscreen { position: fixed; inset: 0; z-index: 9999; border-radius: 0; }
     #mapaWrap.fullscreen #map { height: 100vh !important; }
 
-    /* ══════════════════════════════════════════════════════════
-       MODAL DE INSTALACIÓN — CSS propio (no depende de Tailwind)
-       ══════════════════════════════════════════════════════════ */
+    /* Asegurar que el mapa tenga dimensiones correctas */
+    #map {
+      width: 100% !important;
+      height: 45vh !important;
+      min-height: 320px !important;
+      background: #090D16;
+      z-index: 1;
+    }
+    #map .leaflet-tile-pane { z-index: 200; }
+    #map .leaflet-marker-pane { z-index: 600; }
+
+    #btnInstall { transition: all 0.4s ease; }
+
+    /* MODAL DE INSTALACIÓN */
     #installModal {
       position: fixed;
       inset: 0;
@@ -101,10 +111,8 @@
       padding: 24px;
       max-width: 440px;
       width: 100%;
-      box-shadow: 0 25px 60px -12px rgba(0, 0, 0, 0.85),
-                  0 0 0 4px rgba(250, 204, 21, 0.08);
+      box-shadow: 0 25px 60px -12px rgba(0, 0, 0, 0.85), 0 0 0 4px rgba(250, 204, 21, 0.08);
       color: #E2E8F0;
-      font-family: system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
       animation: slideUpModal 0.3s cubic-bezier(0.16, 1, 0.3, 1);
       max-height: 90vh;
       overflow-y: auto;
@@ -134,19 +142,9 @@
     }
 
     #installModal .modal-body p { margin: 8px 0; }
-
-    #installModal .modal-body ol {
-      margin: 10px 0;
-      padding-left: 22px;
-    }
-
+    #installModal .modal-body ol { margin: 10px 0; padding-left: 22px; }
     #installModal .modal-body li { margin: 8px 0; }
-
-    #installModal .modal-body b {
-      color: #FACC15;
-      font-weight: 800;
-    }
-
+    #installModal .modal-body b { color: #FACC15; font-weight: 800; }
     #installModal .modal-body .text-amber-400 {
       color: #FBBF24 !important;
       font-size: 0.8rem;
@@ -201,7 +199,7 @@
       <div class="flex items-center gap-2">
         <button id="btnInstall" onclick="abrirInstalacion()" aria-label="Instalar como aplicación"
                 style="display:none"
-                class="bg-brand-yellow hover:bg-yellow-400 text-slate-950 border-2 border-yellow-300 font-bold px-3 py-2 rounded-xl text-sm items-center gap-1 transition-colors">
+                class="bg-brand-yellow hover:bg-yellow-400 text-slate-950 border-2 border-yellow-300 font-bold px-3 py-2 rounded-xl text-sm items-center gap-1">
           📲 <span class="hidden sm:inline">Instalar App</span>
         </button>
         <button id="btnToggleSpeech" onclick="toggleSpeech()" aria-label="Activar o desactivar síntesis de voz"
@@ -358,7 +356,6 @@
     </div>
   </main>
 
-  <!-- Modal de instalación PWA -->
   <div id="installModal" class="hidden">
     <div class="modal-card">
       <h3 class="modal-title">📲 Instalar NavVision</h3>
@@ -368,13 +365,10 @@
   </div>
 
   <footer class="mt-6 pt-4 border-t border-slate-800 text-center text-xs text-slate-500 font-medium">
-    NavVision GPS · Requiere HTTPS para geolocalización · <span id="footVersion">v2.2</span>
+    NavVision GPS · Requiere HTTPS para geolocalización · <span id="footVersion">v2.4</span>
   </footer>
 
   <script>
-    /* ============================================================
-       CONFIGURACIÓN DE SUPABASE
-       ============================================================ */
     var SUPABASE_URL = 'https://qwppictwjwkvhcomrcxl.supabase.co';
     var SUPABASE_ANON_KEY = 'sb_publishable_fjr4sn0EUZbphZMODoOCFQ_keOisbZD';
 
@@ -386,9 +380,6 @@
       console.error('[Supabase] Error al inicializar:', e);
     }
 
-    /* ============================================================
-       UTILIDADES GEOGRÁFICAS
-       ============================================================ */
     var R_TIERRA = 6371000;
     function aRad(d) { return d * Math.PI / 180; }
     function aDeg(r) { return r * 180 / Math.PI; }
@@ -434,9 +425,6 @@
       return 'hace ' + Math.round(s / 3600) + ' h';
     }
 
-    /* ============================================================
-       ESTADO GLOBAL
-       ============================================================ */
     var GPS = {
       cfg: {
         opcionesAlta: { enableHighAccuracy: true, maximumAge: 0, timeout: 20000 },
@@ -446,7 +434,8 @@
         maxPrecisionBuena: 50,
         maxPrecisionAceptable: 200,
         maxVelocidad: 55,
-        minDistTrail: 25
+        minDistTrail: 25,
+        maxPrecisionPublicar: 150
       },
       emisor: {
         watchId: null, pos: null, prev: null,
@@ -464,9 +453,8 @@
       codigo: null
     };
 
-    /* ============================================================
-       VOZ
-       ============================================================ */
+    var bufferPosiciones = [];
+
     window.vozActiva = true;
     window.hablar = function (texto, urgente) {
       if (urgente === undefined) urgente = false;
@@ -477,7 +465,7 @@
         u.lang = 'es-ES';
         u.rate = urgente ? 1.15 : 1.0;
         speechSynthesis.speak(u);
-      } catch (e) { /* silencioso */ }
+      } catch (e) {}
     };
 
     window.toggleSpeech = function () {
@@ -489,9 +477,6 @@
       if (window.vozActiva) hablar('Voz activada');
     };
 
-    /* ============================================================
-       UI HELPERS
-       ============================================================ */
     function setBadgeFix(estado, detalle) {
       var el = document.getElementById('badgeFix');
       if (!el) return;
@@ -527,9 +512,6 @@
       });
     }
 
-    /* ============================================================
-       FILTRADO DE POSICIONES
-       ============================================================ */
     function posicionValida(actual, anterior) {
       if (!actual) return false;
       if (!anterior) return true;
@@ -545,15 +527,16 @@
     }
 
     function debePublicar(pos) {
+      if (pos.precision && pos.precision > GPS.cfg.maxPrecisionPublicar) {
+        return false;
+      }
       if (!GPS.emisor.posPublicada) return true;
+      if (GPS.emisor.posPublicada.precision > 80 && pos.precision < 50) return true;
       var d = distanciaMetros(GPS.emisor.posPublicada, pos);
       var t = Date.now() - GPS.emisor.tPublicado;
       return d >= GPS.cfg.minDistPublicar || t >= GPS.cfg.maxIntervaloLatido;
     }
 
-    /* ============================================================
-       EMISOR
-       ============================================================ */
     function toggleGPSTracking() {
       if (GPS.emisor.activo) detenerEmisor();
       else iniciarEmisor();
@@ -575,6 +558,7 @@
       GPS.emisor.usandoBaja = false;
       GPS.emisor.reintentos = 0;
       GPS.trail = [];
+      bufferPosiciones = [];
       if (window.capaTrail) window.capaTrail.clearLayers();
 
       var btn = document.getElementById('btnToggleGPS');
@@ -620,16 +604,40 @@
 
       if (!posicionValida(actual, GPS.emisor.prev)) return;
 
+      if (actual.precision && actual.precision < 100) {
+        bufferPosiciones.push(actual);
+        if (bufferPosiciones.length > 3) bufferPosiciones.shift();
+      }
+
+      if (bufferPosiciones.length >= 2) {
+        var sumaPeso = 0, sumaLat = 0, sumaLng = 0;
+        bufferPosiciones.forEach(function (p) {
+          var peso = 1 / Math.max(p.precision, 5);
+          sumaLat += p.lat * peso;
+          sumaLng += p.lng * peso;
+          sumaPeso += peso;
+        });
+        actual.lat = sumaLat / sumaPeso;
+        actual.lng = sumaLng / sumaPeso;
+      }
+
       var prec = Math.round(actual.precision || 999);
-      if (prec <= GPS.cfg.maxPrecisionBuena) {
+
+      if (prec <= 15) {
         setBadgeFix('ok', prec);
-        avisoGPS('');
-      } else if (prec <= GPS.cfg.maxPrecisionAceptable) {
+        avisoGPS('🟢 Señal GPS excelente (±' + prec + ' m)', 'ok');
+      } else if (prec <= 50) {
+        setBadgeFix('ok', prec);
+        avisoGPS('🟢 Señal GPS buena (±' + prec + ' m)', 'ok');
+      } else if (prec <= 100) {
         setBadgeFix('debil', prec);
-        avisoGPS('Señal moderada (±' + prec + ' m).');
+        avisoGPS('🟡 Señal GPS regular (±' + prec + ' m). Sal a cielo abierto.');
+      } else if (prec <= 200) {
+        setBadgeFix('debil', prec);
+        avisoGPS('🟠 Señal GPS débil (±' + prec + ' m). Aléjate de edificios.', 'error');
       } else {
         setBadgeFix('debil', prec);
-        avisoGPS('Señal débil (±' + prec + ' m). Aléjate de edificios.', 'error');
+        avisoGPS('🔴 Sin señal GPS fiable (±' + prec + ' m). Ve a un espacio abierto.', 'error');
       }
 
       GPS.emisor.prev = GPS.emisor.pos;
@@ -699,9 +707,6 @@
       hablar('Transmisión GPS detenida', true);
     }
 
-    /* ============================================================
-       WAKE LOCK
-       ============================================================ */
     function solicitarWakeLock() {
       try {
         if ('wakeLock' in navigator) {
@@ -710,7 +715,7 @@
             console.log('[WakeLock] activo');
           }).catch(function () {});
         }
-      } catch (e) { /* silencioso */ }
+      } catch (e) {}
     }
 
     function liberarWakeLock() {
@@ -726,9 +731,6 @@
       }
     });
 
-    /* ============================================================
-       RECEPTOR
-       ============================================================ */
     function iniciarReceptor() {
       if (GPS.receptor.activo) return;
       if (!('geolocation' in navigator)) {
@@ -833,9 +835,6 @@
       }
     }
 
-    /* ============================================================
-       MAPA
-       ============================================================ */
     var mapa = null;
     var marcadorEmisor = null;
     var marcadorReceptor = null;
@@ -844,104 +843,130 @@
     var lineaRuta = null;
 
     function inicializarMapa() {
-      if (mapa) return;
       var cont = document.getElementById('map');
       if (!cont) return;
 
-      mapa = L.map('map', { zoomControl: true, attributionControl: false })
-              .setView([19.4326, -99.1332], 15);
+      if (cont.offsetWidth === 0 || cont.offsetHeight === 0) {
+        console.log('[Mapa] Contenedor oculto, reintentando...');
+        setTimeout(inicializarMapa, 300);
+        return;
+      }
 
-      L.tileLayer('https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png', {
-        maxZoom: 19,
-        subdomains: 'abcd'
-      }).addTo(mapa);
+      if (mapa) {
+        setTimeout(function () { if (mapa) mapa.invalidateSize(); }, 100);
+        setTimeout(function () { if (mapa) mapa.invalidateSize(); }, 500);
+        return;
+      }
 
-      capaTrail = L.layerGroup().addTo(mapa);
-      window.capaTrail = capaTrail;
+      try {
+        console.log('[Mapa] Creando, tamaño:', cont.offsetWidth, 'x', cont.offsetHeight);
 
-      var iconoEmisor = L.divIcon({
-        className: '',
-        iconSize: [46, 46],
-        iconAnchor: [23, 23],
-        html: '<div style="width:46px;height:46px;border-radius:50%;background:#FACC15;border:4px solid #fff;display:flex;align-items:center;justify-content:center;font-size:24px;box-shadow:0 4px 14px rgba(0,0,0,.6)">📱</div>'
-      });
-      var iconoReceptor = L.divIcon({
-        className: '',
-        iconSize: [42, 42],
-        iconAnchor: [21, 21],
-        html: '<div style="width:42px;height:42px;border-radius:50%;background:#3B82F6;border:4px solid #fff;display:flex;align-items:center;justify-content:center;font-size:20px;box-shadow:0 4px 14px rgba(0,0,0,.6)">🙋</div>'
-      });
+        mapa = L.map('map', {
+          zoomControl: true,
+          attributionControl: false,
+          preferCanvas: true
+        }).setView([19.4326, -99.1332], 15);
 
-      marcadorEmisor = L.marker([0, 0], { icon: iconoEmisor });
-      marcadorReceptor = L.marker([0, 0], { icon: iconoReceptor });
+        var capaPrincipal = L.tileLayer(
+          'https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png', {
+          maxZoom: 19,
+          subdomains: 'abcd',
+          crossOrigin: true
+        }).addTo(mapa);
 
-      circuloPrecision = L.circle([0, 0], {
-        radius: 0,
-        color: '#FACC15',
-        weight: 1.5,
-        fillColor: '#FACC15',
-        fillOpacity: 0.12
-      }).addTo(mapa);
+        var errores = 0;
+        capaPrincipal.on('tileerror', function () {
+          errores++;
+          if (errores === 2) {
+            console.warn('[Mapa] CartoDB falla. Cambiando a OpenStreetMap...');
+            try {
+              mapa.removeLayer(capaPrincipal);
+              L.tileLayer('https://tile.openstreetmap.org/{z}/{x}/{y}.png', { maxZoom: 19 }).addTo(mapa);
+            } catch (e) {}
+          }
+        });
 
-      lineaRuta = L.polyline([], {
-        color: '#3B82F6',
-        weight: 3,
-        opacity: 0.6,
-        dashArray: '8 8'
-      }).addTo(mapa);
+        capaTrail = L.layerGroup().addTo(mapa);
+        window.capaTrail = capaTrail;
 
-      setTimeout(function () { mapa.invalidateSize(); }, 250);
+        var iconoEmisor = L.divIcon({
+          className: '', iconSize: [46, 46], iconAnchor: [23, 23],
+          html: '<div style="width:46px;height:46px;border-radius:50%;background:#FACC15;border:4px solid #fff;display:flex;align-items:center;justify-content:center;font-size:24px;box-shadow:0 4px 14px rgba(0,0,0,.6)">📱</div>'
+        });
+        var iconoReceptor = L.divIcon({
+          className: '', iconSize: [42, 42], iconAnchor: [21, 21],
+          html: '<div style="width:42px;height:42px;border-radius:50%;background:#3B82F6;border:4px solid #fff;display:flex;align-items:center;justify-content:center;font-size:20px;box-shadow:0 4px 14px rgba(0,0,0,.6)">🙋</div>'
+        });
+
+        marcadorEmisor = L.marker([0, 0], { icon: iconoEmisor });
+        marcadorReceptor = L.marker([0, 0], { icon: iconoReceptor });
+
+        circuloPrecision = L.circle([0, 0], {
+          radius: 0, color: '#FACC15', weight: 1.5,
+          fillColor: '#FACC15', fillOpacity: 0.12
+        }).addTo(mapa);
+
+        lineaRuta = L.polyline([], {
+          color: '#3B82F6', weight: 3, opacity: 0.6, dashArray: '8 8'
+        }).addTo(mapa);
+
+        setTimeout(function () { if (mapa) mapa.invalidateSize(); }, 100);
+        setTimeout(function () { if (mapa) mapa.invalidateSize(); }, 500);
+        setTimeout(function () { if (mapa) mapa.invalidateSize(); }, 1500);
+
+        console.log('[Mapa] ✅ Creado');
+      } catch (e) {
+        console.error('[Mapa] Error:', e.message);
+        cont.innerHTML = '<div style="display:flex;align-items:center;justify-content:center;height:100%;color:#FACC15;font-weight:bold;padding:20px;text-align:center">⚠️ No se pudo cargar el mapa.</div>';
+      }
     }
 
     function actualizarMapaEmisor(pos) {
-      if (!mapa) return;
-      var ll = [pos.lat, pos.lng];
+      if (!mapa || !marcadorEmisor) return;
+      try {
+        var ll = [pos.lat, pos.lng];
+        marcadorEmisor.setLatLng(ll).addTo(mapa);
+        if (circuloPrecision) circuloPrecision.setLatLng(ll).setRadius(pos.precision || 20);
 
-      marcadorEmisor.setLatLng(ll).addTo(mapa);
-      circuloPrecision.setLatLng(ll).setRadius(pos.precision || 20);
-
-      var ultimo = GPS.trail[GPS.trail.length - 1];
-      if (!ultimo || distanciaMetros(ultimo, pos) >= GPS.cfg.minDistTrail) {
-        GPS.trail.push({ lat: pos.lat, lng: pos.lng });
-        if (GPS.trail.length > 500) GPS.trail.shift();
-        capaTrail.clearLayers();
-        var puntos = GPS.trail.map(function (p) { return [p.lat, p.lng]; });
-        L.polyline(puntos, {
-          color: '#FACC15',
-          weight: 4,
-          opacity: 0.55
-        }).addTo(capaTrail);
-      }
-
-      if (GPS.follow) {
-        mapa.setView(ll, mapa.getZoom() < 16 ? 17 : mapa.getZoom());
-      }
+        var ultimo = GPS.trail[GPS.trail.length - 1];
+        if (!ultimo || distanciaMetros(ultimo, pos) >= GPS.cfg.minDistTrail) {
+          GPS.trail.push({ lat: pos.lat, lng: pos.lng });
+          if (GPS.trail.length > 500) GPS.trail.shift();
+          if (capaTrail) {
+            capaTrail.clearLayers();
+            var puntos = GPS.trail.map(function (p) { return [p.lat, p.lng]; });
+            L.polyline(puntos, { color: '#FACC15', weight: 4, opacity: 0.55 }).addTo(capaTrail);
+          }
+        }
+        if (GPS.follow) mapa.setView(ll, mapa.getZoom() < 16 ? 17 : mapa.getZoom());
+      } catch (e) {}
     }
 
     function actualizarMapaReceptor() {
-      if (!mapa) return;
-      var emi = GPS.receptor.ultimoEmisor;
-      var yo = GPS.receptor.pos;
+      if (!mapa || !marcadorEmisor || !marcadorReceptor) return;
+      try {
+        var emi = GPS.receptor.ultimoEmisor;
+        var yo = GPS.receptor.pos;
 
-      if (emi) {
-        marcadorEmisor.setLatLng([emi.lat, emi.lng]).addTo(mapa);
-        circuloPrecision.setLatLng([emi.lat, emi.lng]).setRadius(40);
-      }
-
-      if (yo) {
-        marcadorReceptor.setLatLng([yo.lat, yo.lng]).addTo(mapa);
-      }
-
-      if (emi && yo) {
-        lineaRuta.setLatLngs([[yo.lat, yo.lng], [emi.lat, emi.lng]]);
-        if (GPS.follow) {
-          var bounds = L.latLngBounds([[yo.lat, yo.lng], [emi.lat, emi.lng]]);
-          mapa.fitBounds(bounds, { padding: [70, 70], maxZoom: 17 });
+        if (emi) {
+          marcadorEmisor.setLatLng([emi.lat, emi.lng]).addTo(mapa);
+          if (circuloPrecision) circuloPrecision.setLatLng([emi.lat, emi.lng]).setRadius(40);
         }
-      } else if (emi) {
-        lineaRuta.setLatLngs([]);
-        if (GPS.follow) mapa.setView([emi.lat, emi.lng], 17);
-      }
+        if (yo) {
+          marcadorReceptor.setLatLng([yo.lat, yo.lng]).addTo(mapa);
+        }
+        if (emi && yo && lineaRuta) {
+          lineaRuta.setLatLngs([[yo.lat, yo.lng], [emi.lat, emi.lng]]);
+          if (GPS.follow) {
+            var bounds = L.latLngBounds([[yo.lat, yo.lng], [emi.lat, emi.lng]]);
+            mapa.fitBounds(bounds, { padding: [70, 70], maxZoom: 17 });
+          }
+        } else if (emi && lineaRuta) {
+          lineaRuta.setLatLngs([]);
+          if (GPS.follow) mapa.setView([emi.lat, emi.lng], 17);
+        }
+        mapa.invalidateSize({ animate: false });
+      } catch (e) {}
     }
 
     function toggleFollow() {
@@ -966,15 +991,12 @@
     function toggleFullscreenMapa() {
       var w = document.getElementById('mapaWrap');
       w.classList.toggle('fullscreen');
-      setTimeout(function () { if (mapa) mapa.invalidateSize(); }, 300);
+      setTimeout(function () { if (mapa) mapa.invalidateSize(); }, 100);
+      setTimeout(function () { if (mapa) mapa.invalidateSize(); }, 400);
     }
 
-    /* ============================================================
-       SUPABASE — PUBLICAR (EMISOR)
-       ============================================================ */
     function publicarPosicion(pos) {
       if (!GPS.codigo || !supabaseClient) return;
-
       supabaseClient
         .from('ubicaciones')
         .upsert({
@@ -988,12 +1010,11 @@
         .then(function (res) {
           if (res.error) throw res.error;
           setBadgeCloud('ok', 'Supabase OK');
-          console.log('[Supabase] Posición publicada:', pos.lat.toFixed(5), pos.lng.toFixed(5));
+          console.log('[Supabase] Publicado:', pos.lat.toFixed(5), pos.lng.toFixed(5));
         })
         .catch(function (error) {
-          console.error('[Supabase] Error al publicar:', error.message);
+          console.error('[Supabase] Error:', error.message);
           setBadgeCloud('error', 'Error nube');
-          avisoGPS('Error al conectar con el servidor: ' + error.message, 'error');
         });
     }
 
@@ -1007,56 +1028,38 @@
           timestamp: Date.now()
         }, { onConflict: 'codigo_sesion' })
         .then(function () {})
-        .catch(function (error) {
-          console.error('[Supabase] Error estado:', error.message);
-        });
+        .catch(function (error) {});
     }
 
-    /* ============================================================
-       SUPABASE — SUSCRIPCIÓN (RECEPTOR)
-       ============================================================ */
     function suscribirEmisor(codigo) {
-      if (!supabaseClient) {
-        avisoGPS('Supabase no está disponible.', 'error');
-        return;
-      }
-
+      if (!supabaseClient) return;
       if (GPS.receptor.canal) {
         supabaseClient.removeChannel(GPS.receptor.canal);
         GPS.receptor.canal = null;
       }
-
       setBadgeCloud('wait', 'Conectando…');
 
       GPS.receptor.canal = supabaseClient
         .channel('ubicaciones-' + codigo)
         .on('postgres_changes', {
-          event: '*',
-          schema: 'public',
-          table: 'ubicaciones',
+          event: '*', schema: 'public', table: 'ubicaciones',
           filter: 'codigo_sesion=eq.' + codigo
         }, function (payload) {
           var datos = payload.new;
           if (datos && datos.latitud != null) {
             onEmisorRemoto({
-              lat: datos.latitud,
-              lng: datos.longitud,
-              precision: datos.precision,
-              timestamp: datos.timestamp,
-              estado: datos.estado
+              lat: datos.latitud, lng: datos.longitud,
+              precision: datos.precision, timestamp: datos.timestamp, estado: datos.estado
             });
           }
         })
         .subscribe(function (status) {
-          console.log('[Supabase Realtime] Estado:', status);
+          console.log('[Supabase Realtime]', status);
           if (status === 'SUBSCRIBED') {
             setBadgeCloud('ok', 'En vivo');
             avisoGPS('Conectado al emisor en tiempo real.', 'ok');
           } else if (status === 'CHANNEL_ERROR' || status === 'TIMED_OUT') {
             setBadgeCloud('error', 'Error nube');
-            avisoGPS('Conexión perdida. Reintentando...', 'error');
-          } else if (status === 'CLOSED') {
-            setBadgeCloud('off', 'Cerrado');
           }
         });
 
@@ -1066,50 +1069,33 @@
     function cargarUltimaPosicion(codigo) {
       if (!supabaseClient) return;
       supabaseClient
-        .from('ubicaciones')
-        .select('*')
-        .eq('codigo_sesion', codigo)
-        .limit(1)
-        .maybeSingle()
+        .from('ubicaciones').select('*').eq('codigo_sesion', codigo).limit(1).maybeSingle()
         .then(function (res) {
           if (res.error) throw res.error;
           var data = res.data;
           if (data && data.latitud != null) {
             onEmisorRemoto({
-              lat: data.latitud,
-              lng: data.longitud,
-              precision: data.precision,
-              timestamp: data.timestamp,
-              estado: data.estado
+              lat: data.latitud, lng: data.longitud,
+              precision: data.precision, timestamp: data.timestamp, estado: data.estado
             });
           }
         })
-        .catch(function (e) {
-          console.warn('[Supabase] Sin datos previos:', e.message);
-        });
+        .catch(function (e) {});
     }
 
-    /* ============================================================
-       CONECTAR RECEPTOR
-       ============================================================ */
     function conectarAlEmisor() {
       var input = document.getElementById('inputCodigo');
       var codigo = (input.value || '').trim().toUpperCase();
-
       if (codigo.length !== 6) {
         alert('El código debe tener 6 caracteres (ej: ABC123)');
         return;
       }
-
       GPS.codigo = codigo;
       hablar('Conectando con el emisor ' + codigo);
       suscribirEmisor(codigo);
       iniciarReceptor();
     }
 
-    /* ============================================================
-       CAMBIO DE ROL
-       ============================================================ */
     function switchRole(rol) {
       var esEmisor = rol === 'emisor';
 
@@ -1128,20 +1114,7 @@
       document.getElementById('badgeMode').textContent =
         esEmisor ? 'MODO: EMISOR (USUARIO)' : 'MODO: RECEPTOR (TUTOR)';
 
-      // Mostrar el botón de instalación al entrar al programa
-      var btnInst = document.getElementById('btnInstall');
-      if (btnInst && !window.matchMedia('(display-mode: standalone)').matches && window.navigator.standalone !== true) {
-        setTimeout(function () {
-          btnInst.style.display = 'flex';
-          btnInst.style.opacity = '0';
-          btnInst.style.transform = 'translateY(-8px)';
-          btnInst.style.transition = 'all 0.4s ease';
-          setTimeout(function () {
-            btnInst.style.opacity = '1';
-            btnInst.style.transform = 'translateY(0)';
-          }, 50);
-        }, 600);
-      }
+      mostrarBotonInstalarSiProcede();
 
       if (esEmisor) {
         detenerReceptor();
@@ -1149,16 +1122,15 @@
           GPS.codigo = generarCodigo();
           document.getElementById('codigoVinculo').textContent = GPS.codigo;
         }
-        inicializarMapa();
       } else {
-        inicializarMapa();
-        setTimeout(function () { if (mapa) mapa.invalidateSize(); }, 300);
+        setTimeout(function () {
+          inicializarMapa();
+          iniciarReceptor();
+          setTimeout(function () { if (mapa) mapa.invalidateSize(); }, 800);
+        }, 200);
       }
     }
 
-    /* ============================================================
-       CÓDIGO DE VINCULACIÓN
-       ============================================================ */
     function generarCodigo() {
       var chars = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
       var c = '';
@@ -1175,24 +1147,69 @@
       }
     }
 
-    /* ============================================================
-       PWA - INSTALACIÓN COMO APP NATIVA
-       ============================================================ */
     var deferredInstallPrompt = null;
 
-    function generarIconoDataURI(size) {
-      var svg = '<svg xmlns="http://www.w3.org/2000/svg" width="' + size + '" height="' + size + '" viewBox="0 0 512 512">' +
-        '<rect width="512" height="512" rx="112" fill="#FACC15"/>' +
-        '<text x="256" y="380" font-size="340" font-weight="900" text-anchor="middle" fill="#090D16" font-family="Arial">N</text>' +
-        '<circle cx="380" cy="120" r="40" fill="#22C55E"/>' +
-        '</svg>';
-      return 'data:image/svg+xml;base64,' + btoa(unescape(encodeURIComponent(svg)));
+    function estaInstalada() {
+      try {
+        if (window.navigator.standalone === true) return true;
+        return window.matchMedia('(display-mode: standalone)').matches ||
+               window.matchMedia('(display-mode: fullscreen)').matches ||
+               window.matchMedia('(display-mode: minimal-ui)').matches ||
+               window.matchMedia('(display-mode: window-controls-overlay)').matches;
+      } catch (e) {
+        return false;
+      }
+    }
+
+    function generarIconoPNG(size) {
+      try {
+        var canvas = document.createElement('canvas');
+        canvas.width = size;
+        canvas.height = size;
+        var ctx = canvas.getContext('2d');
+        ctx.fillStyle = '#FACC15';
+        var r = size * 0.22;
+        ctx.beginPath();
+        ctx.moveTo(r, 0);
+        ctx.lineTo(size - r, 0);
+        ctx.quadraticCurveTo(size, 0, size, r);
+        ctx.lineTo(size, size - r);
+        ctx.quadraticCurveTo(size, size, size - r, size);
+        ctx.lineTo(r, size);
+        ctx.quadraticCurveTo(0, size, 0, size - r);
+        ctx.lineTo(0, r);
+        ctx.quadraticCurveTo(0, 0, r, 0);
+        ctx.closePath();
+        ctx.fill();
+        ctx.fillStyle = '#090D16';
+        ctx.font = '900 ' + Math.round(size * 0.62) + 'px Arial, sans-serif';
+        ctx.textAlign = 'center';
+        ctx.textBaseline = 'middle';
+        ctx.fillText('N', size / 2, size / 2 + size * 0.04);
+        ctx.fillStyle = '#22C55E';
+        ctx.beginPath();
+        ctx.arc(size * 0.76, size * 0.24, size * 0.09, 0, Math.PI * 2);
+        ctx.fill();
+        return canvas.toDataURL('image/png');
+      } catch (e) {
+        return null;
+      }
     }
 
     function registrarManifest() {
       try {
-        var icon192 = generarIconoDataURI(192);
-        var icon512 = generarIconoDataURI(512);
+        var icon192 = generarIconoPNG(192);
+        var icon512 = generarIconoPNG(512);
+        var icons = [];
+        if (icon192) {
+          icons.push({ src: icon192, sizes: '192x192', type: 'image/png', purpose: 'any' });
+          icons.push({ src: icon192, sizes: '192x192', type: 'image/png', purpose: 'maskable' });
+        }
+        if (icon512) {
+          icons.push({ src: icon512, sizes: '512x512', type: 'image/png', purpose: 'any' });
+          icons.push({ src: icon512, sizes: '512x512', type: 'image/png', purpose: 'maskable' });
+        }
+
         var manifest = {
           name: 'NavVision GPS',
           short_name: 'NavVision',
@@ -1205,54 +1222,49 @@
           theme_color: '#FACC15',
           lang: 'es',
           categories: ['navigation', 'accessibility', 'utilities'],
-          icons: [
-            { src: icon192, sizes: '192x192', type: 'image/svg+xml', purpose: 'any' },
-            { src: icon192, sizes: '192x192', type: 'image/svg+xml', purpose: 'maskable' },
-            { src: icon512, sizes: '512x512', type: 'image/svg+xml', purpose: 'any' },
-            { src: icon512, sizes: '512x512', type: 'image/svg+xml', purpose: 'maskable' }
-          ]
+          icons: icons
         };
+
         var blob = new Blob([JSON.stringify(manifest)], { type: 'application/manifest+json' });
         var url = URL.createObjectURL(blob);
         var link = document.getElementById('manifestLink');
         if (link) link.href = url;
         var apple = document.getElementById('appleIcon');
-        if (apple) apple.href = icon192;
+        if (apple && icon192) apple.href = icon192;
         console.log('[PWA] Manifest registrado');
       } catch (e) {
-        console.warn('[PWA] Error al registrar manifest:', e.message);
+        console.warn('[PWA] Error manifest:', e.message);
       }
     }
 
     function registrarServiceWorker() {
-      if (!('serviceWorker' in navigator)) return;
-      var swCode = [
-        "self.addEventListener('install', function(e){ self.skipWaiting(); });",
-        "self.addEventListener('activate', function(e){ e.waitUntil(self.clients.claim()); });",
-        "self.addEventListener('fetch', function(e){",
-        "  if (e.request.method !== 'GET') return;",
-        "  e.respondWith(fetch(e.request).catch(function(){ return caches.match(e.request); }));",
-        "});"
-      ].join('\n');
-      try {
-        var blob = new Blob([swCode], { type: 'application/javascript' });
-        var url = URL.createObjectURL(blob);
-        navigator.serviceWorker.register(url)
-          .then(function () { console.log('[PWA] Service Worker registrado'); })
-          .catch(function (err) {
-            console.warn('[PWA] SW no registrado vía Blob:', err.message);
-          });
-      } catch (e) {
-        console.warn('[PWA] SW error:', e.message);
+      console.log('[PWA] Service Worker no requerido (manifest es suficiente)');
+    }
+
+    function mostrarBotonInstalarSiProcede() {
+      var btn = document.getElementById('btnInstall');
+      if (!btn) return;
+      if (estaInstalada()) {
+        btn.style.display = 'none';
+        return;
+      }
+      if (btn.style.display === 'none' || btn.style.display === '') {
+        btn.style.display = 'flex';
+        btn.style.opacity = '0';
+        btn.style.transform = 'translateY(-8px)';
+        setTimeout(function () {
+          btn.style.opacity = '1';
+          btn.style.transform = 'translateY(0)';
+        }, 50);
       }
     }
 
     window.addEventListener('beforeinstallprompt', function (e) {
       e.preventDefault();
       deferredInstallPrompt = e;
-      console.log('[PWA] Prompt de instalación disponible');
+      console.log('[PWA] Instalación disponible');
       var btn = document.getElementById('btnInstall');
-      if (btn && btn.style.display !== 'none') {
+      if (btn) {
         btn.classList.add('pulse-active');
         btn.classList.remove('bg-brand-yellow');
         btn.classList.add('bg-emerald-500', 'border-emerald-300');
@@ -1260,13 +1272,14 @@
     });
 
     window.addEventListener('appinstalled', function () {
-      console.log('[PWA] App instalada correctamente');
+      console.log('[PWA] Instalada');
       deferredInstallPrompt = null;
       hablar('Aplicación instalada correctamente');
       var btn = document.getElementById('btnInstall');
       if (btn) {
-        btn.classList.remove('pulse-active');
-        btn.style.display = 'none';
+        btn.style.opacity = '0';
+        btn.style.transform = 'scale(0.8)';
+        setTimeout(function () { btn.style.display = 'none'; }, 300);
       }
     });
 
@@ -1277,56 +1290,37 @@
       return 'desktop';
     }
 
-    function actualizarBotonInstalar() {
-      // El botón permanece oculto hasta que el usuario entre al programa
-      var btn = document.getElementById('btnInstall');
-      if (!btn) return;
-      if (window.matchMedia('(display-mode: standalone)').matches || window.navigator.standalone === true) {
-        btn.style.display = 'none';
-      }
-    }
-
     function abrirInstalacion() {
+      if (estaInstalada()) {
+        alert('✅ NavVision ya está instalada como aplicación en este dispositivo.');
+        return;
+      }
       if (deferredInstallPrompt) {
         deferredInstallPrompt.prompt();
         deferredInstallPrompt.userChoice.then(function (choice) {
-          console.log('[PWA] Resultado:', choice.outcome);
           if (choice.outcome === 'accepted') hablar('Instalando aplicación');
           deferredInstallPrompt = null;
         });
         return;
       }
-
-      if (window.matchMedia('(display-mode: standalone)').matches || window.navigator.standalone === true) {
-        alert('✅ NavVision ya está instalada como aplicación en este dispositivo.');
-        return;
-      }
-
       var plat = plataformaActual();
       var html = '';
       if (plat === 'ios') {
-        html =
-          '<p><b>En iPhone / iPad (Safari):</b></p>' +
-          '<ol class="list-decimal ml-5 space-y-1">' +
-          '<li>Toca el botón <b>Compartir</b> (⬆️ el cuadro con flecha).</li>' +
+        html = '<p><b>En iPhone / iPad (Safari):</b></p>' +
+          '<ol><li>Toca el botón <b>Compartir</b> (⬆️ el cuadro con flecha).</li>' +
           '<li>Desplázate y toca <b>"Añadir a pantalla de inicio"</b>.</li>' +
-          '<li>Ponle el nombre <b>"NavVision"</b> y toca <b>Añadir</b>.</li>' +
-          '</ol>' +
-          '<p class="text-amber-400 mt-2 text-xs">⚠️ Debe ser en <b>Safari</b>. Chrome en iOS no permite instalar.</p>';
+          '<li>Ponle el nombre <b>"NavVision"</b> y toca <b>Añadir</b>.</li></ol>' +
+          '<p class="text-amber-400">⚠️ Debe ser en <b>Safari</b>. Chrome en iOS no permite instalar.</p>';
       } else if (plat === 'android') {
-        html =
-          '<p><b>En Android (Chrome / Edge / Samsung):</b></p>' +
-          '<ol class="list-decimal ml-5 space-y-1">' +
-          '<li>Toca el menú <b>⋮</b> (tres puntos arriba a la derecha).</li>' +
+        html = '<p><b>En Android (Chrome / Edge / Samsung):</b></p>' +
+          '<ol><li>Toca el menú <b>⋮</b> (tres puntos arriba a la derecha).</li>' +
           '<li>Selecciona <b>"Instalar aplicación"</b> o <b>"Añadir a pantalla de inicio"</b>.</li>' +
-          '<li>Confirma con <b>Instalar</b>.</li>' +
-          '</ol>' +
-          '<p class="text-amber-400 mt-2 text-xs">💡 Si no aparece, recarga la página con internet activo y vuelve a intentar.</p>';
+          '<li>Confirma con <b>Instalar</b>.</li></ol>' +
+          '<p class="text-amber-400">💡 Si no aparece, recarga la página con internet activo.</p>';
       } else {
-        html =
-          '<p><b>En computadora:</b></p>' +
-          '<p>Busca el ícono de <b>instalación</b> (⊕ o 💻) en la barra de direcciones del navegador, o ve al menú <b>⋮</b> → <b>"Instalar NavVision"</b>.</p>' +
-          '<p class="text-amber-400 mt-2 text-xs">💡 Recuerda: en móvil, la instalación funciona mejor.</p>';
+        html = '<p><b>En computadora (Chrome / Edge):</b></p>' +
+          '<p>Busca el ícono de <b>instalación</b> (⊕ o 💻) en la barra de direcciones.</p>' +
+          '<p>O ve al menú <b>⋮</b> → <b>"Instalar NavVision"</b>.</p>';
       }
       document.getElementById('installInstructions').innerHTML = html;
       document.getElementById('installModal').classList.remove('hidden');
@@ -1337,20 +1331,19 @@
       document.getElementById('installModal').classList.add('hidden');
     }
 
-    /* ============================================================
-       ARRANQUE
-       ============================================================ */
     window.addEventListener('DOMContentLoaded', function () {
+      console.log('[App] Iniciando...');
+
       GPS.codigo = generarCodigo();
       var el = document.getElementById('codigoVinculo');
       if (el) el.textContent = GPS.codigo;
 
-      inicializarMapa();
-
-      // Iniciar PWA
       registrarManifest();
       registrarServiceWorker();
-      actualizarBotonInstalar();
+
+      setTimeout(function () {
+        mostrarBotonInstalarSiProcede();
+      }, 1200);
 
       setInterval(function () {
         var elEnv = document.getElementById('gpsUltimoEnvio');
@@ -1368,9 +1361,6 @@
       });
     });
 
-    /* ============================================================
-       FUNCIONES AUXILIARES
-       ============================================================ */
     function connectBluetooth() {
       hablar('Función de conexión Bluetooth no configurada');
     }
@@ -1378,15 +1368,13 @@
     function toggleInfoModal() {
       alert(
         'NavVision GPS\n\n' +
-        'MODO EMISOR (persona ciega):\n' +
+        'MODO EMISOR:\n' +
         '1. Pulsa INICIAR TRANSMISIÓN GPS.\n' +
-        '2. Comparte el código de 6 letras con tu familiar.\n\n' +
-        'MODO RECEPTOR (familiar):\n' +
+        '2. Comparte el código de 6 letras.\n\n' +
+        'MODO RECEPTOR:\n' +
         '1. Escribe el código del emisor.\n' +
         '2. Pulsa ▶ para conectar.\n' +
-        '3. Verás su ubicación en el mapa en tiempo real.\n\n' +
-        'INSTALAR COMO APP:\n' +
-        'Pulsa el botón amarillo "📲 Instalar App" que aparece al entrar al programa.'
+        '3. Verás su ubicación en el mapa en tiempo real.'
       );
     }
   </script>
