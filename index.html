@@ -70,7 +70,6 @@
     #mapaWrap.fullscreen { position: fixed; inset: 0; z-index: 9999; border-radius: 0; }
     #mapaWrap.fullscreen #map { height: 100vh !important; }
 
-    /* Asegurar que el mapa tenga dimensiones correctas */
     #map {
       width: 100% !important;
       height: 45vh !important;
@@ -83,7 +82,6 @@
 
     #btnInstall { transition: all 0.4s ease; }
 
-    /* MODAL DE INSTALACIÓN */
     #installModal {
       position: fixed;
       inset: 0;
@@ -365,10 +363,13 @@
   </div>
 
   <footer class="mt-6 pt-4 border-t border-slate-800 text-center text-xs text-slate-500 font-medium">
-    NavVision GPS · Requiere HTTPS para geolocalización · <span id="footVersion">v2.4</span>
+    NavVision GPS · Requiere HTTPS para geolocalización · <span id="footVersion">v3.1</span>
   </footer>
 
   <script>
+    /* ============================================================
+       CONFIGURACIÓN DE SUPABASE
+       ============================================================ */
     var SUPABASE_URL = 'https://qwppictwjwkvhcomrcxl.supabase.co';
     var SUPABASE_ANON_KEY = 'sb_publishable_fjr4sn0EUZbphZMODoOCFQ_keOisbZD';
 
@@ -380,6 +381,9 @@
       console.error('[Supabase] Error al inicializar:', e);
     }
 
+    /* ============================================================
+       UTILIDADES GEOGRÁFICAS
+       ============================================================ */
     var R_TIERRA = 6371000;
     function aRad(d) { return d * Math.PI / 180; }
     function aDeg(r) { return r * 180 / Math.PI; }
@@ -425,6 +429,9 @@
       return 'hace ' + Math.round(s / 3600) + ' h';
     }
 
+    /* ============================================================
+       ESTADO GLOBAL
+       ============================================================ */
     var GPS = {
       cfg: {
         opcionesAlta: { enableHighAccuracy: true, maximumAge: 0, timeout: 20000 },
@@ -455,6 +462,9 @@
 
     var bufferPosiciones = [];
 
+    /* ============================================================
+       VOZ
+       ============================================================ */
     window.vozActiva = true;
     window.hablar = function (texto, urgente) {
       if (urgente === undefined) urgente = false;
@@ -477,6 +487,9 @@
       if (window.vozActiva) hablar('Voz activada');
     };
 
+    /* ============================================================
+       UI HELPERS
+       ============================================================ */
     function setBadgeFix(estado, detalle) {
       var el = document.getElementById('badgeFix');
       if (!el) return;
@@ -512,6 +525,9 @@
       });
     }
 
+    /* ============================================================
+       FILTRADO DE POSICIONES
+       ============================================================ */
     function posicionValida(actual, anterior) {
       if (!actual) return false;
       if (!anterior) return true;
@@ -527,9 +543,7 @@
     }
 
     function debePublicar(pos) {
-      if (pos.precision && pos.precision > GPS.cfg.maxPrecisionPublicar) {
-        return false;
-      }
+      if (pos.precision && pos.precision > GPS.cfg.maxPrecisionPublicar) return false;
       if (!GPS.emisor.posPublicada) return true;
       if (GPS.emisor.posPublicada.precision > 80 && pos.precision < 50) return true;
       var d = distanciaMetros(GPS.emisor.posPublicada, pos);
@@ -537,6 +551,9 @@
       return d >= GPS.cfg.minDistPublicar || t >= GPS.cfg.maxIntervaloLatido;
     }
 
+    /* ============================================================
+       EMISOR
+       ============================================================ */
     function toggleGPSTracking() {
       if (GPS.emisor.activo) detenerEmisor();
       else iniciarEmisor();
@@ -579,26 +596,17 @@
     function lanzarWatchEmisor(usarBaja) {
       if (!GPS.emisor.activo) return;
       if (GPS.emisor.watchId != null) navigator.geolocation.clearWatch(GPS.emisor.watchId);
-
       var opciones = usarBaja ? GPS.cfg.opcionesBaja : GPS.cfg.opcionesAlta;
       GPS.emisor.usandoBaja = usarBaja;
-
-      GPS.emisor.watchId = navigator.geolocation.watchPosition(
-        onPosicionEmisor,
-        onErrorEmisor,
-        opciones
-      );
+      GPS.emisor.watchId = navigator.geolocation.watchPosition(onPosicionEmisor, onErrorEmisor, opciones);
     }
 
     function onPosicionEmisor(pos) {
       var c = pos.coords;
       var actual = {
-        lat: c.latitude,
-        lng: c.longitude,
-        precision: c.accuracy,
-        velocidad: c.speed,
-        rumbo: c.heading,
-        altitud: c.altitude,
+        lat: c.latitude, lng: c.longitude,
+        precision: c.accuracy, velocidad: c.speed,
+        rumbo: c.heading, altitud: c.altitude,
         timestamp: pos.timestamp
       };
 
@@ -695,18 +703,19 @@
         GPS.emisor.watchId = null;
       }
       liberarWakeLock();
-
       var btn = document.getElementById('btnToggleGPS');
       btn.classList.remove('bg-red-600', 'hover:bg-red-500', 'border-red-400', 'text-white');
       btn.classList.add('bg-brand-yellow', 'hover:bg-yellow-300', 'border-yellow-200', 'text-slate-950');
       document.getElementById('textBtnGPS').textContent = 'INICIAR TRANSMISIÓN GPS';
       setBadgeFix('off');
       avisoGPS('');
-
       publicarEstado('offline');
       hablar('Transmisión GPS detenida', true);
     }
 
+    /* ============================================================
+       WAKE LOCK
+       ============================================================ */
     function solicitarWakeLock() {
       try {
         if ('wakeLock' in navigator) {
@@ -731,6 +740,9 @@
       }
     });
 
+    /* ============================================================
+       RECEPTOR
+       ============================================================ */
     function iniciarReceptor() {
       if (GPS.receptor.activo) return;
       if (!('geolocation' in navigator)) {
@@ -774,7 +786,6 @@
 
     function onEmisorRemoto(datos) {
       if (!datos || datos.lat == null) return;
-
       GPS.receptor.ultimoEmisor = { lat: datos.lat, lng: datos.lng };
       GPS.receptor.tsEmisor = datos.timestamp || Date.now();
 
@@ -809,7 +820,6 @@
         if (elDir) elDir.textContent = 'Esperando señal del emisor…';
         return;
       }
-
       if (!yo) {
         if (elD) elD.textContent = 'Ubicación propia no disponible';
         if (elDir) elDir.textContent = 'Activa el GPS de este dispositivo';
@@ -820,12 +830,8 @@
       var r = rumboGrados(yo, emi);
 
       if (elD) elD.textContent = formatDistancia(d).replace(/^a /, '');
-      if (elDir) {
-        elDir.textContent = 'El usuario está ' + formatDistancia(d) + ' al ' + cardinal(r) + ' de ti';
-      }
-      if (elFlecha && r != null) {
-        elFlecha.style.transform = 'rotate(' + r + 'deg)';
-      }
+      if (elDir) elDir.textContent = 'El usuario está ' + formatDistancia(d) + ' al ' + cardinal(r) + ' de ti';
+      if (elFlecha && r != null) elFlecha.style.transform = 'rotate(' + r + 'deg)';
 
       if (d < 30 && !GPS.receptor._avisadoCerca) {
         GPS.receptor._avisadoCerca = true;
@@ -835,6 +841,9 @@
       }
     }
 
+    /* ============================================================
+       MAPA — OpenStreetMap (SIEMPRE FUNCIONA, SIN API KEY)
+       ============================================================ */
     var mapa = null;
     var marcadorEmisor = null;
     var marcadorReceptor = null;
@@ -867,24 +876,14 @@
           preferCanvas: true
         }).setView([19.4326, -99.1332], 15);
 
-        var capaPrincipal = L.tileLayer(
-          'https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png', {
+        // ============================================================
+        // CAPA PRINCIPAL: OpenStreetMap
+        // SIN API KEY · SIN REGISTRO · SIEMPRE FUNCIONA
+        // ============================================================
+        L.tileLayer('https://tile.openstreetmap.org/{z}/{x}/{y}.png', {
           maxZoom: 19,
-          subdomains: 'abcd',
-          crossOrigin: true
+          attribution: '© OpenStreetMap'
         }).addTo(mapa);
-
-        var errores = 0;
-        capaPrincipal.on('tileerror', function () {
-          errores++;
-          if (errores === 2) {
-            console.warn('[Mapa] CartoDB falla. Cambiando a OpenStreetMap...');
-            try {
-              mapa.removeLayer(capaPrincipal);
-              L.tileLayer('https://tile.openstreetmap.org/{z}/{x}/{y}.png', { maxZoom: 19 }).addTo(mapa);
-            } catch (e) {}
-          }
-        });
 
         capaTrail = L.layerGroup().addTo(mapa);
         window.capaTrail = capaTrail;
@@ -914,7 +913,7 @@
         setTimeout(function () { if (mapa) mapa.invalidateSize(); }, 500);
         setTimeout(function () { if (mapa) mapa.invalidateSize(); }, 1500);
 
-        console.log('[Mapa] ✅ Creado');
+        console.log('[Mapa] ✅ Creado con OpenStreetMap');
       } catch (e) {
         console.error('[Mapa] Error:', e.message);
         cont.innerHTML = '<div style="display:flex;align-items:center;justify-content:center;height:100%;color:#FACC15;font-weight:bold;padding:20px;text-align:center">⚠️ No se pudo cargar el mapa.</div>';
@@ -995,6 +994,9 @@
       setTimeout(function () { if (mapa) mapa.invalidateSize(); }, 400);
     }
 
+    /* ============================================================
+       SUPABASE — PUBLICAR (EMISOR)
+       ============================================================ */
     function publicarPosicion(pos) {
       if (!GPS.codigo || !supabaseClient) return;
       supabaseClient
@@ -1031,6 +1033,9 @@
         .catch(function (error) {});
     }
 
+    /* ============================================================
+       SUPABASE — SUSCRIPCIÓN (RECEPTOR)
+       ============================================================ */
     function suscribirEmisor(codigo) {
       if (!supabaseClient) return;
       if (GPS.receptor.canal) {
@@ -1083,6 +1088,9 @@
         .catch(function (e) {});
     }
 
+    /* ============================================================
+       CONECTAR RECEPTOR
+       ============================================================ */
     function conectarAlEmisor() {
       var input = document.getElementById('inputCodigo');
       var codigo = (input.value || '').trim().toUpperCase();
@@ -1096,6 +1104,9 @@
       iniciarReceptor();
     }
 
+    /* ============================================================
+       CAMBIO DE ROL
+       ============================================================ */
     function switchRole(rol) {
       var esEmisor = rol === 'emisor';
 
@@ -1131,6 +1142,9 @@
       }
     }
 
+    /* ============================================================
+       CÓDIGO DE VINCULACIÓN
+       ============================================================ */
     function generarCodigo() {
       var chars = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
       var c = '';
@@ -1147,6 +1161,9 @@
       }
     }
 
+    /* ============================================================
+       PWA — INSTALACIÓN COMO APP
+       ============================================================ */
     var deferredInstallPrompt = null;
 
     function estaInstalada() {
@@ -1214,8 +1231,8 @@
           name: 'NavVision GPS',
           short_name: 'NavVision',
           description: 'Asistente accesible de orientación y rastreo GPS',
-          start_url: '.',
-          scope: '.',
+          start_url: './',
+          scope: './',
           display: 'standalone',
           orientation: 'portrait',
           background_color: '#090D16',
@@ -1331,8 +1348,12 @@
       document.getElementById('installModal').classList.add('hidden');
     }
 
+    /* ============================================================
+       ARRANQUE
+       ============================================================ */
     window.addEventListener('DOMContentLoaded', function () {
       console.log('[App] Iniciando...');
+      console.log('[App] Modo standalone:', estaInstalada());
 
       GPS.codigo = generarCodigo();
       var el = document.getElementById('codigoVinculo');
@@ -1361,6 +1382,9 @@
       });
     });
 
+    /* ============================================================
+       FUNCIONES AUXILIARES
+       ============================================================ */
     function connectBluetooth() {
       hablar('Función de conexión Bluetooth no configurada');
     }
@@ -1374,7 +1398,9 @@
         'MODO RECEPTOR:\n' +
         '1. Escribe el código del emisor.\n' +
         '2. Pulsa ▶ para conectar.\n' +
-        '3. Verás su ubicación en el mapa en tiempo real.'
+        '3. Verás su ubicación en el mapa en tiempo real.\n\n' +
+        'INSTALAR COMO APP:\n' +
+        'Pulsa el botón 📲 Instalar App que aparece al entrar al programa.'
       );
     }
   </script>
